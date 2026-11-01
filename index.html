@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tuğra Sandbox - Eğlence Parkı</title>
+  <style>
+    :root {
+      --bg-color: #1a1a2e;
+      --panel-bg: rgba(22, 33, 62, 0.9);
+      --accent: #e94560;
+      --text: #ffffff;
+      --btn-hover: #0f3460;
+    }
+
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      margin: 0;
+      padding: 0;
+    }
+
+    body, html {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: var(--bg-color);
+      color: var(--text);
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    #game-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: calc(100% - 110px);
+      background: radial-gradient(circle at center, #16213e 0%, #0f3460 100%);
+      cursor: crosshair;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Üst Bilgi Paneli */
+    #ui-overlay {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      right: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    .stat-card {
+      background: var(--panel-bg);
+      padding: 12px 20px;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(8px);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+      pointer-events: auto;
+    }
+
+    .health-bar-container {
+      width: 180px;
+      height: 14px;
+      background: #333;
+      border-radius: 7px;
+      overflow: hidden;
+      margin-top: 6px;
+      border: 1px solid rgba(255,255,255,0.2);
+    }
+
+    .health-bar {
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, #ff4e50, #f9d423);
+      transition: width 0.1s ease;
+    }
+
+    #score-display {
+      font-size: 24px;
+      font-weight: bold;
+      color: #f9d423;
+      text-shadow: 0 0 10px rgba(249, 212, 35, 0.5);
+    }
+
+    /* Alt Araç Çubuğu */
+    #toolbar {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 110px;
+      background: rgba(15, 52, 96, 0.95);
+      border-top: 2px solid var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 0 15px;
+      overflow-x: auto;
+      backdrop-filter: blur(10px);
+      z-index: 10;
+    }
+
+    .tool-btn {
+      background: rgba(255, 255, 255, 0.05);
+      border: 2px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      color: white;
+      padding: 10px 14px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      min-width: 80px;
+      flex-shrink: 0;
+    }
+
+    .tool-btn:hover {
+      background: var(--btn-hover);
+      border-color: var(--accent);
+      transform: translateY(-3px);
+    }
+
+    .tool-btn.active {
+      background: var(--accent);
+      border-color: #fff;
+      box-shadow: 0 0 15px rgba(233, 69, 96, 0.6);
+    }
+
+    .tool-icon {
+      font-size: 24px;
+    }
+
+    .tool-name {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .action-btn {
+      background: #27ae60;
+      border-color: #2ecc71;
+    }
+    .action-btn:hover {
+      background: #2ecc71;
+    }
+
+    #instructions {
+      position: absolute;
+      bottom: 120px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.6);
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 12px;
+      pointer-events: none;
+      white-space: nowrap;
+      z-index: 10;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="game-container">
+    <canvas id="canvas"></canvas>
+  </div>
+
+  <div id="ui-overlay">
+    <div class="stat-card">
+      <h2 style="font-size: 16px; margin-bottom: 2px;">TUĞRA</h2>
+      <div style="font-size: 11px; opacity: 0.8;" id="status-text">Durum: Sağlam 😎</div>
+      <div class="health-bar-container">
+        <div id="health-bar" class="health-bar"></div>
+      </div>
+    </div>
+
+    <div class="stat-card" style="text-align: right;">
+      <div style="font-size: 11px; opacity: 0.8;">SKOR / HASAR</div>
+      <div id="score-display">0</div>
+    </div>
+  </div>
+
+  <div id="instructions">💡 Tuğra'yı sürükleyip fırlatabilir veya bir silah seçip dokunabilirsin!</div>
+
+  <div id="toolbar">
+    <button class="tool-btn active" data-tool="hand">
+      <span class="tool-icon">🖐️</span>
+      <span class="tool-name">El (Taşı)</span>
+    </button>
+    <button class="tool-btn" data-tool="whip">
+      <span class="tool-icon">🪢</span>
+      <span class="tool-name">Kırbaç</span>
+    </button>
+    <button class="tool-btn" data-tool="gun">
+      <span class="tool-icon">🔫</span>
+      <span class="tool-name">Silah</span>
+    </button>
+    <button class="tool-btn" data-tool="knife">
+      <span class="tool-icon">🗡️</span>
+      <span class="tool-name">Bıçak</span>
+    </button>
+    <button class="tool-btn" data-tool="bomb">
+      <span class="tool-icon">💣</span>
+      <span class="tool-name">Bomba</span>
+    </button>
+    <button class="tool-btn" data-tool="glove">
+      <span class="tool-icon">🥊</span>
+      <span class="tool-name">Boks</span>
+    </button>
+    <button class="tool-btn" data-tool="water">
+      <span class="tool-icon">💦</span>
+      <span class="tool-name">Su</span>
+    </button>
+    <button class="tool-btn action-btn" id="heal-btn">
+      <span class="tool-icon">🩹</span>
+      <span class="tool-name">İyileştir</span>
+    </button>
+  </div>
+
+  <script>
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    let audioCtx;
+
+    function initAudio() {
+      if (!audioCtx) audioCtx = new AudioContext();
+    }
+
+    function playSound(type) {
+      if (!audioCtx) return;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      const now = audioCtx.currentTime;
+
+      if (type === 'whip') {
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(800, now);
+        osc.frequency.exponentialRampToValueAtTime(100, now + 0.15);
+        gain.gain.setValueAtTime(0.5, now);
+        gain.gain.linearRampToValueAtTime(0.01, now + 0.15);
+      } else if (type === 'gun') {
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(600, now);
+        osc.frequency.exponentialRampToValueAtTime(40, now + 0.1);
+        gain.gain.setValueAtTime(0.8, now);
+        gain.gain.linearRampToValueAtTime(0.01, now + 0.1);
+      } else if (type === 'knife') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(1200, now);
+        osc.frequency.linearRampToValueAtTime(400, now + 0.08);
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.linearRampToValueAtTime(0.01, now + 0.08);
+      } else if (type === 'bomb') {
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(150, now);
+        osc.frequency.linearRampToValueAtTime(30, now + 0.4);
+        gain.gain.setValueAtTime(1, now);
+        gain.gain.linearRampToValueAtTime(0.01, now + 0.4);
+      } else if (type === 'hit') {
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(250, now);
+        osc.frequency.linearRampToValueAtTime(50, now + 0.1);
+        gain.gain.setValueAtTime(0.4, now);
+        gain.gain.linearRampToValueAtTime(0.01, now + 0.1);
+      } else if (type === 'heal') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(300, now);
+        osc.frequency.exponentialRampToValueAtTime(600, now + 0.2);
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.linearRampToValueAtTime(0.01, now + 0.2);
+      }
+      osc.start(now);
+      osc.stop(now + 0.2);
+    }
+
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight - 110;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    let currentTool = 'hand';
+    let score = 0;
+    let particles = [];
+    let floatingTexts = [];
+    let bloodStains = [];
+
+    const tugra = {
+      x: window.innerWidth / 2,
+      y: 200,
+      vx: 0,
+      vy: 0,
+      radius: 30,
+      health: 100,
+      maxHealth: 100,
+      isDragging: false,
+      dragOffsetX: 0,
+      dragOffsetY: 0,
+      angle: 0,
+      hurtTimer: 0
+    };
+
+    class Particle {
+      constructor(x, y, color, speed, size, life) {
+        this.x = x; this.y = y; this.color = color;
+        this.vx = (Math.random() - 0.5) * speed;
+        this.vy = (Math.random() - 0.5) * speed;
+        this.size = Math.random() * size + 2;
+        this.life = life; this.maxLife = life;
+      }
+      update() {
+        this.x += this.vx; this.y += this.vy;
+        this.vy += 0.1;
+        this.life--;
+      }
+      draw() {
+        ctx.save();
+        ctx.globalAlpha = this.life / this.maxLife;
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    class FloatingText {
+      constructor(x, y, text, color) {
+        this.x = x; this.y = y; this.text = text; this.color = color;
+        this.vy = -2; this.life = 40;
+      }
+      update() { this.y += this.vy; this.life--; }
+      draw() {
+        ctx.save();
+        ctx.globalAlpha = this.life / 40;
+        ctx.font = 'bold 20px Segoe UI';
+        ctx.fillStyle = this.color;
+        ctx.fillText(this.text, this.x, this.y);
+        ctx.restore();
+      }
+    }
+
+    function drawTugra() {
+      ctx.save();
+      ctx.translate(tugra.x, tugra.y);
+      ctx.rotate(tugra.angle);
+
+      const healthPercent = tugra.health / tugra.maxHealth;
+
+      // Kafa
+      ctx.beginPath();
+      ctx.arc(0, -60, tugra.radius, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffe0bd';
+      ctx.fill();
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = '#333';
+      ctx.stroke();
+
+      // İsim
+      ctx.font = 'bold 16px Segoe UI';
+      ctx.fillStyle = '#f9d423';
+      ctx.textAlign = 'center';
+      ctx.fillText('TUĞRA', 0, -100);
+
+      // İfade
+      ctx.font = '24px Arial';
+      let expr = '😎';
+      if (tugra.hurtTimer > 0) expr = '😵';
+      else if (healthPercent < 0.3) expr = '😭';
+      else if (healthPercent < 0.7) expr = '🤕';
+      ctx.fillText(expr, 0, -52);
+
+      // Gövde
+      ctx.beginPath();
+      ctx.moveTo(0, -30);
+      ctx.lineTo(0, 30);
+      ctx.lineWidth = 6;
+      ctx.strokeStyle = '#333';
+      ctx.stroke();
+
+      ctx.fillStyle = '#e94560';
+      ctx.fillRect(-12, -25, 24, 40);
+
+      // Kolları ve Bacaklar
+      ctx.beginPath();
+      ctx.moveTo(0, -20); ctx.lineTo(-30, 0);
+      ctx.moveTo(0, -20); ctx.lineTo(30, 0);
+      ctx.moveTo(0, 30); ctx.lineTo(-20, 80);
+      ctx.moveTo(0, 30); ctx.lineTo(20, 80);
+      ctx.stroke();
+
+      ctx.restore();
+    }
+
+    function updateTugra() {
+      if (!tugra.isDragging) {
+        tugra.vy += 0.5;
+        tugra.x += tugra.vx;
+        tugra.y += tugra.vy;
+        tugra.vx *= 0.98;
+        tugra.vy *= 0.98;
+
+        const ground = canvas.height - 40;
+        if (tugra.y > ground) {
+          tugra.y = ground;
+          tugra.vy *= -0.5;
+          if (Math.abs(tugra.vy) > 4) {
+            damageTugra(Math.floor(Math.abs(tugra.vy)), tugra.x, tugra.y);
+          }
+        }
+        if (tugra.x < 50) { tugra.x = 50; tugra.vx *= -0.5; }
+        if (tugra.x > canvas.width - 50) { tugra.x = canvas.width - 50; tugra.vx *= -0.5; }
+        tugra.angle = tugra.vx * 0.02;
+      }
+      if (tugra.hurtTimer > 0) tugra.hurtTimer--;
+    }
+
+    function damageTugra(amount, x, y, particleColor = '#ff0055') {
+      initAudio();
+      tugra.health = Math.max(0, tugra.health - amount);
+      score += amount * 10;
+      tugra.hurtTimer = 15;
+
+      document.getElementById('health-bar').style.width = `${(tugra.health / tugra.maxHealth) * 100}%`;
+      document.getElementById('score-display').innerText = score;
+      
+      const statusText = document.getElementById('status-text');
+      if (tugra.health === 0) statusText.innerText = "Durum: Nakavt! 💀";
+      else if (tugra.health < 30) statusText.innerText = "Durum: Çok Kötü! 😭";
+      else if (tugra.health < 70) statusText.innerText = "Durum: Yaralı 🤕";
+      else statusText.innerText = "Durum: Sağlam 😎";
+
+      floatingTexts.push(new FloatingText(x, y - 40, `-${amount}`, '#ff4757'));
+      for (let i = 0; i < amount; i++) {
+        particles.push(new Particle(x, y, particleColor, 8, 4, 30));
+      }
+      bloodStains.push({ x: x + (Math.random() - 0.5) * 20, y: y + (Math.random() - 0.5) * 20, size: Math.random() * 8 + 3, color: particleColor });
+      if (bloodStains.length > 50) bloodStains.shift();
+    }
+
+    function healTugra() {
+      initAudio();
+      playSound('heal');
+      tugra.health = tugra.maxHealth;
+      document.getElementById('health-bar').style.width = '100%';
+      document.getElementById('status-text').innerText = "Durum: İyileşti! ✨";
+      floatingTexts.push(new FloatingText(tugra.x, tugra.y - 60, `FULL CAN!`, '#2ecc71'));
+      for (let i = 0; i < 20; i++) {
+        particles.push(new Particle(tugra.x, tugra.y - 30, '#2ecc71', 6, 5, 40));
+      }
+    }
+
+    function handleAction(x, y) {
+      initAudio();
+      if (currentTool === 'whip') {
+        playSound('whip');
+        damageTugra(15, tugra.x, tugra.y, '#e74c3c');
+        tugra.vx += (tugra.x - x) * 0.2;
+        tugra.vy -= 5;
+      } else if (currentTool === 'gun') {
+        playSound('gun');
+        damageTugra(25, tugra.x, tugra.y, '#f1c40f');
+        tugra.vx += (x < tugra.x ? 15 : -15);
+      } else if (currentTool === 'knife') {
+        playSound('knife');
+        damageTugra(20, tugra.x, tugra.y, '#c0392b');
+        tugra.vy -= 2;
+      } else if (currentTool === 'bomb') {
+        playSound('bomb');
+        damageTugra(40, tugra.x, tugra.y, '#e67e22');
+        tugra.vy = -18;
+        tugra.vx = (tugra.x - x) * 0.5;
+        for (let i = 0; i < 30; i++) {
+          particles.push(new Particle(x, y, '#ff5252', 12, 6, 40));
+        }
+      } else if (currentTool === 'glove') {
+        playSound('hit');
+        damageTugra(10, tugra.x, tugra.y, '#ff7979');
+        tugra.vx = (tugra.x - x) * 0.4;
+        tugra.vy = -8;
+      } else if (currentTool === 'water') {
+        playSound('heal');
+        floatingTexts.push(new FloatingText(x, y, 'Ferahlattı! 💦', '#3498db'));
+        for (let i = 0; i < 15; i++) {
+          particles.push(new Particle(x, y, '#3498db', 5, 4, 25));
+        }
+      }
+    }
+
+    let lastX = 0, lastY = 0;
+
+    canvas.addEventListener('mousedown', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      const dist = Math.hypot(mx - tugra.x, my - (tugra.y - 30));
+
+      if (currentTool === 'hand' && dist < 60) {
+        tugra.isDragging = true;
+      } else {
+        handleAction(mx, my);
+      }
+      lastX = mx; lastY = my;
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+
+      if (tugra.isDragging) {
+        tugra.vx = (mx - lastX) * 0.5;
+        tugra.vy = (my - lastY) * 0.5;
+        tugra.x = mx;
+        tugra.y = my;
+      }
+      lastX = mx; lastY = my;
+    });
+
+    window.addEventListener('mouseup', () => { tugra.isDragging = false; });
+
+    document.querySelectorAll('.tool-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (btn.id === 'heal-btn') {
+          healTugra();
+          return;
+        }
+        document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentTool = btn.dataset.tool;
+      });
+    });
+
+    function loop() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Zemin
+      ctx.fillStyle = '#0f3460';
+      ctx.fillRect(0, canvas.height - 40, canvas.width, 40);
+      ctx.fillStyle = '#e94560';
+      ctx.fillRect(0, canvas.height - 44, canvas.width, 4);
+
+      bloodStains.forEach(stain => {
+        ctx.fillStyle = stain.color;
+        ctx.beginPath();
+        ctx.arc(stain.x, stain.y, stain.size, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      updateTugra();
+      drawTugra();
+
+      particles.forEach((p, index) => {
+        p.update(); p.draw();
+        if (p.life <= 0) particles.splice(index, 1);
+      });
+
+      floatingTexts.forEach((ft, index) => {
+        ft.update(); ft.draw();
+        if (ft.life <= 0) floatingTexts.splice(index, 1);
+      });
+
+      requestAnimationFrame(loop);
+    }
+
+    loop();
+  </script>
+</body>
+</html>
